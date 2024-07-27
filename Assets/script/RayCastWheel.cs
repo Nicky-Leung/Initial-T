@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
+using Palmmedia.ReportGenerator.Core;
 using UnityEngine;
-
+using UnityEngine.Tilemaps;
 using Vector3 = UnityEngine.Vector3;
 
 public class RayCastWheel : MonoBehaviour
@@ -19,35 +20,29 @@ public class RayCastWheel : MonoBehaviour
     private List<GameObject> Wheels = new List<GameObject>(); // List of all wheels
     public Rigidbody VechicleRigidBody;
     public float MaxSuspension = 0.5f;
-    public float engineForce = 10000;
     private int frameCounter = 0;
-    public float maxSteerAngle = 30f;
+    public float maxSteerAngle = 50f;
+    public float lateralFrictionMultiplier = 1;
+    public AnimationCurve powerCurve;
+    public float maxTorque = 100;
+    public float maxSpeed = 100;
+
+    public AnimationCurve FrontTireGripCurve;
+    public AnimationCurve RearTireGripCurve;
 
 
 
-    /**
-        * @brief Create a forward marker for each wheel
-        * 
-        * Create a forward marker for each wheel
-        * @param Wheels List of all wheels
-        * @post A forward marker is created for each wheel
-        */
-    void forwardmarker (List<GameObject> Wheels){
-         foreach (GameObject wheel in Wheels)
-        {
-            // Create a new GameObject to indicate the forward direction of the wheel
-            GameObject forwardMarker = new GameObject(wheel.name + "ForwardMarker");
 
-        // Set the newly created GameObject as a child of the wheel
-             forwardMarker.transform.SetParent(wheel.transform.parent, false);
+    /** 
 
-        // Position the marker in front of the wheel to indicate the forward direction
-        // Adjust the position as needed. Here, it's set 1 unit in front of the wheel.
-            forwardMarker.transform.localPosition = new Vector3(0, 0, 1);
-            
-        }
-    }
-    // Start is called before the first frame update
+     * @brief Start is called before the first frame update
+     * 
+     * Start is called before the first frame update
+     * @post Rigidbody of the vehicle is assigned to VechicleRigidBody
+     * @post All wheels are added to the list of wheels
+     * @post A forward marker is created for each wheel
+
+    **/
     void Start()
     {
         VechicleRigidBody = VehicleBody.GetComponent<Rigidbody>();
@@ -55,36 +50,21 @@ public class RayCastWheel : MonoBehaviour
         Wheels.Add(FrontRightWheel);
         Wheels.Add(RearLeftWheel);
         Wheels.Add(RearRightWheel);
-        // create a forward marker for each wheel
-        forwardmarker(Wheels);
-       
+
     }
-        
 
-    // Update is called once per frame
- // Assign this in the inspector or find it dynamically in Start()
-
-    void Update()
-    {
-        float throttle = Input.GetAxis("Vertical");
-
-        float steer = Input.GetAxis("Horizontal");
-    
-        // calculate the current steering angle
-        float currentSteeringAngle = maxSteerAngle * steer;
-         
-    frameCounter++;
-
-    // Check if the current frame is the 5th frame
-    // apply suspension force to the wheels
-    foreach (GameObject wheel in Wheels)
+    /**
+    * @brief Check if the wheel is in the air
+    *
+    * Check if the wheel is in the air
+    * @param wheel The wheel to check
+    * @return True if the wheel is in the air, false otherwise
+    */
+    bool suspension(GameObject wheel)
     {
         Vector3 origin = wheel.transform.position;
         Vector3 direction = Vector3.down;
-        Vector3 forward = -wheel.transform.parent.Find(wheel.name + "ForwardMarker").transform.up;
-
         RaycastHit hit;
-
         bool rayhit = Physics.Raycast(origin, direction, out hit, MaxSuspension);
         if (Physics.Raycast(origin, direction, out hit, MaxSuspension))
         {
@@ -96,60 +76,132 @@ public class RayCastWheel : MonoBehaviour
             // Debug.Log("Wheel is in the air");
             Debug.DrawLine(origin, hit.point, Color.red, 1f);
         }
+        return rayhit;
+    }
 
-        
-        
+    /**
+    * @brief Apply steering to the wheel
+    *
+    * Apply steering to the wheel
+    * @param wheel The wheel to steer
+    * @param throttle The throttle value
+    * @param currentSteeringAngle The current steering angle
+    * @param rayhit True if the wheel is in contact with the ground, false otherwise
+    */
+    void steering(GameObject wheel, float throttle, float currentSteeringAngle, bool rayhit, float speedRatio)
+    {
 
         if (wheel.name == "FL" || wheel.name == "FR")
         {
+            wheel.transform.localEulerAngles = new Vector3(currentSteeringAngle, 0, 0);
 
-            if(wheel.name == "FR"){
-            wheel.transform.localEulerAngles = new Vector3(-currentSteeringAngle, wheel.transform.localEulerAngles.y,  wheel.transform.localEulerAngles.z);
-            }
-            else{
-                wheel.transform.localEulerAngles = new Vector3(currentSteeringAngle, wheel.transform.localEulerAngles.y,  wheel.transform.localEulerAngles.z);
-            }
-            if (throttle != 0)
-            {
-                wheel.transform.Rotate(Vector3.back * throttle);
-
-                if(rayhit){
-                VechicleRigidBody.AddForceAtPosition(currentSteeringAngle * Vector3.right, wheel.transform.position); 
-                }      
-            }
-               
         }
-
-        if (wheel.name == "RL" || wheel.name == "RR")
+        Vector3 wheeldirection = wheel.transform.forward;
+        Debug.DrawLine(wheel.transform.position, wheel.transform.position + wheeldirection, Color.red, 1f);
+        Vector3 tireVelocity = VechicleRigidBody.GetPointVelocity(wheel.transform.position);
+        float steeringVelocity = Vector3.Dot(tireVelocity, wheeldirection); // The velocity of the wheel in the direction it is facing
+        float frontWheelGrip = FrontTireGripCurve.Evaluate(speedRatio);
+        float rearWheelGrip = RearTireGripCurve.Evaluate(speedRatio);
+        float steeringChange;
+        if (wheel.name == "FL" || wheel.name == "FR")
         {
-            
-            Debug.Log (forward);
-        
-            FrontRightWheel.transform.Rotate(Vector3.back * throttle);
-            FrontLeftWheel.transform.Rotate(Vector3.back * throttle);
-            RearRightWheel.transform.Rotate(Vector3.back * throttle);
-            RearLeftWheel.transform.Rotate(Vector3.back * throttle);            
-
-        if (rayhit){
-            VechicleRigidBody.AddForceAtPosition(engineForce * throttle * forward, wheel.transform.position);
-             Debug.DrawLine(wheel.transform.position, wheel.transform.position + forward * 2, Color.blue, 1f);
+            steeringChange = -steeringVelocity * frontWheelGrip; // The change in velocity required to correct for lateral slip
         }
+        else
+        {
+            steeringChange = -steeringVelocity * rearWheelGrip; // The change in velocity required to correct for lateral slip
         }
-    
 
-       
+        float acceleration = steeringChange / Time.fixedDeltaTime; // The acceleration required to correct for lateral slip
+
+
+        if (rayhit)
+        {
+            Vector3 force = acceleration * wheeldirection;
+            // Clamp the force to prevent excessive steering forces
+            float maxForce = 100f; // Adjust this value as needed
+            force = Vector3.ClampMagnitude(force, maxForce);
+            Vector3 position = wheel.transform.position;
+            VechicleRigidBody.AddForceAtPosition(force, position);
+
+           
+
+            if (frameCounter == 60)
+            {
+                Debug.Log("Steering Force Applied: " + force + " at Position: " + position);
+                Debug.Log(steeringVelocity);
+                Debug.Log("currentspeed" + VechicleRigidBody.velocity.magnitude);  
+                Debug.Log("speedRatio" + speedRatio);
+                frameCounter = 0;
+            }
+            Debug.DrawLine(position, position + force, Color.green, 1f);
+        }
     }
 
-    
-
-    if (frameCounter % 120 == 0)
+    void ApplyThrottle(GameObject wheel, float throttle, Vector3 forward, bool rayhit, float speedRatio)
     {
-        Debug.Log("Tire Forward position" + FrontRightWheel.transform.forward);
-        frameCounter = 0; // Reset the counter after logging
+        if (rayhit)
+
+        {
+            if (throttle > 0)
+            {
+
+                float avalibleTorque = maxTorque * powerCurve.Evaluate(speedRatio) * throttle; // Calculate the torque available to the wheel based on powercurve, throttle, and speed
+                VechicleRigidBody.AddForceAtPosition(forward * avalibleTorque, wheel.transform.position);
+                Debug.DrawLine(wheel.transform.position, wheel.transform.position + forward * 2, Color.blue, 1f);
+            }
+            else
+            {
+
+                float brakeForce = throttle - 0.1f * 10;
+                VechicleRigidBody.AddForceAtPosition(forward * brakeForce, wheel.transform.position);
+
+            }
+        }
     }
+
+    void VisualiseWheel(GameObject wheel, Vector3 forward)
+    {
+        if (Vector3.Dot(forward, VechicleRigidBody.velocity) > 0)
+            wheel.transform.Rotate(Vector3.back * VechicleRigidBody.GetPointVelocity(wheel.transform.position).magnitude);
+
+        else
+        {
+            wheel.transform.Rotate(-Vector3.back * VechicleRigidBody.GetPointVelocity(wheel.transform.position).magnitude);
+        }
+    }
+
+    void WheelPhysics(List<GameObject> Wheels)
+    {
+        float throttle = Input.GetAxis("Vertical");
+        float steer = Input.GetAxis("Horizontal");
+       
+        // calculate the current steering angle
+        float currentSteeringAngle = maxSteerAngle * steer;
+        foreach (GameObject wheel in Wheels)
+        {
+            float currentSpeed = VechicleRigidBody.velocity.magnitude;
+            float speedRatio = currentSpeed / maxSpeed;
+            Vector3 forward = VechicleRigidBody.transform.forward;
+            bool rayhit = suspension(wheel);
+            steering(wheel, throttle, currentSteeringAngle, rayhit, speedRatio);
+            if (wheel.name == "RL" || wheel.name == "RR")
+            {
+                ApplyThrottle(wheel, throttle, forward, rayhit, speedRatio);
+            }
+            VisualiseWheel(wheel, forward);
+        }
+
         
-        Debug.Log("Throttle value: " + throttle);
+
+    }
+    void FixedUpdate()
+    {
+
+        WheelPhysics(Wheels);
+        
+        frameCounter++;
 
 
-
-    }}
+    }
+}
