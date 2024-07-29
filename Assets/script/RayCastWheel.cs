@@ -12,6 +12,8 @@ public class RayCastWheel : MonoBehaviour
 {
 
 
+    private float currentSteeringAngle = 0;
+
     public GameObject VehicleBody;
     public GameObject FrontRightWheel;
     public GameObject FrontLeftWheel;
@@ -26,6 +28,12 @@ public class RayCastWheel : MonoBehaviour
     public AnimationCurve powerCurve;
     public float maxTorque = 100;
     public float maxSpeed = 100;
+    public float maxSteeringForce = 100f;
+
+    public float CurrentSteeringAngle
+    {
+        get { return currentSteeringAngle; }
+    }
 
     public AnimationCurve FrontTireGripCurve;
     public AnimationCurve RearTireGripCurve;
@@ -105,7 +113,7 @@ public class RayCastWheel : MonoBehaviour
         float steeringChange;
         if (wheel.name == "FL" || wheel.name == "FR")
         {
-            steeringChange = -steeringVelocity * frontWheelGrip; // The change in velocity required to correct for lateral slip
+            steeringChange = -steeringVelocity * frontWheelGrip ; // The change in velocity required to correct for lateral slip
         }
         else
         {
@@ -119,8 +127,8 @@ public class RayCastWheel : MonoBehaviour
         {
             Vector3 force = acceleration * wheeldirection;
             // Clamp the force to prevent excessive steering forces
-            float maxForce = 100f; // Adjust this value as needed
-            force = Vector3.ClampMagnitude(force, maxForce);
+             // Adjust this value as needed
+            force = Vector3.ClampMagnitude(force, maxSteeringForce);
             Vector3 position = wheel.transform.position;
             VechicleRigidBody.AddForceAtPosition(force, position);
 
@@ -177,12 +185,12 @@ public class RayCastWheel : MonoBehaviour
         float steer = Input.GetAxis("Horizontal");
        
         // calculate the current steering angle
-        float currentSteeringAngle = maxSteerAngle * steer;
+        currentSteeringAngle = maxSteerAngle * steer;
         foreach (GameObject wheel in Wheels)
         {
             float currentSpeed = VechicleRigidBody.velocity.magnitude;
             float speedRatio = currentSpeed / maxSpeed;
-            Vector3 forward = VechicleRigidBody.transform.forward;
+            Vector3 forward = -VechicleRigidBody.transform.right;
             bool rayhit = suspension(wheel);
             steering(wheel, throttle, currentSteeringAngle, rayhit, speedRatio);
             if (wheel.name == "RL" || wheel.name == "RR")
