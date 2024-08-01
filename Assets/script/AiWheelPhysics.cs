@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using Vector3 = UnityEngine.Vector3;
 
-public class RayCastWheel : MonoBehaviour
+public class AiWheelPhysics : MonoBehaviour
 {
 
 
@@ -141,6 +141,7 @@ public class RayCastWheel : MonoBehaviour
                 // Debug.Log("currentspeed" + VechicleRigidBody.velocity.magnitude);  
                 // Debug.Log("speedRatio" + speedRatio);
                 // frameCounter = 0;
+                //  Debug.Log(throttle);
             }
             Debug.DrawLine(position, position + force, Color.green, 1f);
         }
@@ -181,8 +182,9 @@ public class RayCastWheel : MonoBehaviour
 
     void WheelPhysics(List<GameObject> Wheels)
     {
-        float throttle = Input.GetAxis("Vertical");
-        float steer = Input.GetAxis("Horizontal");
+        float throttle = GetComponent<carfollower>().Throttle;
+       
+        float steer = GetComponent<carfollower>().Steering;
        
         // calculate the current steering angle
         currentSteeringAngle = maxSteerAngle * steer;
