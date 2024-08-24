@@ -30,6 +30,9 @@ public class RayCastWheel : MonoBehaviour
     public float maxSpeed = 100;
     public float maxSteeringForce = 100f;
 
+    public bool isAICar = false;
+
+
     public float CurrentSteeringAngle
     {
         get { return currentSteeringAngle; }
@@ -37,6 +40,8 @@ public class RayCastWheel : MonoBehaviour
 
     public AnimationCurve FrontTireGripCurve;
     public AnimationCurve RearTireGripCurve;
+
+    public float dragCoefficient = 0.2f;
 
 
 
@@ -113,7 +118,7 @@ public class RayCastWheel : MonoBehaviour
         float steeringChange;
         if (wheel.name == "FL" || wheel.name == "FR")
         {
-            steeringChange = -steeringVelocity * frontWheelGrip ; // The change in velocity required to correct for lateral slip
+            steeringChange = -steeringVelocity * frontWheelGrip; // The change in velocity required to correct for lateral slip
         }
         else
         {
@@ -127,12 +132,12 @@ public class RayCastWheel : MonoBehaviour
         {
             Vector3 force = acceleration * wheeldirection;
             // Clamp the force to prevent excessive steering forces
-             // Adjust this value as needed
+            // Adjust this value as needed
             force = Vector3.ClampMagnitude(force, maxSteeringForce);
             Vector3 position = wheel.transform.position;
             VechicleRigidBody.AddForceAtPosition(force, position);
 
-           
+
 
             if (frameCounter == 60)
             {
@@ -167,6 +172,16 @@ public class RayCastWheel : MonoBehaviour
             }
         }
     }
+    void ApplyFriction(Vector3 forward)
+    {
+
+        Vector3 velocity = VechicleRigidBody.velocity;
+        float speed = velocity.magnitude;
+        Vector3 dragForce = -velocity.normalized * speed * speed * dragCoefficient;
+
+        // Apply the drag force to the vehicle's rigidbody
+        VechicleRigidBody.AddForce(dragForce);
+    }
 
     void VisualiseWheel(GameObject wheel, Vector3 forward)
     {
@@ -179,18 +194,46 @@ public class RayCastWheel : MonoBehaviour
         }
     }
 
+    (float,float) getInput()
+    {
+        float throttle;
+        float steer;
+        if (isAICar)
+        {
+
+             throttle = GetComponent<carfollower>().Throttle;
+
+             steer = GetComponent<carfollower>().Steering;
+        }
+        else
+        {
+             throttle = Input.GetAxis("Vertical");
+             steer = Input.GetAxis("Horizontal");
+        }
+
+        return (throttle, steer);
+
+
+    }
+
+
+
+
     void WheelPhysics(List<GameObject> Wheels)
     {
-        float throttle = Input.GetAxis("Vertical");
-        float steer = Input.GetAxis("Horizontal");
-       
+        (float throttle, float steer) = getInput();
+        
+
+        Vector3 forward = -VechicleRigidBody.transform.right;
+
         // calculate the current steering angle
         currentSteeringAngle = maxSteerAngle * steer;
+        ApplyFriction(forward);
         foreach (GameObject wheel in Wheels)
         {
             float currentSpeed = VechicleRigidBody.velocity.magnitude;
             float speedRatio = currentSpeed / maxSpeed;
-            Vector3 forward = -VechicleRigidBody.transform.right;
+
             bool rayhit = suspension(wheel);
             steering(wheel, throttle, currentSteeringAngle, rayhit, speedRatio);
             if (wheel.name == "RL" || wheel.name == "RR")
@@ -200,14 +243,14 @@ public class RayCastWheel : MonoBehaviour
             VisualiseWheel(wheel, forward);
         }
 
-        
+
 
     }
     void FixedUpdate()
     {
 
         WheelPhysics(Wheels);
-        
+
         frameCounter++;
 
 

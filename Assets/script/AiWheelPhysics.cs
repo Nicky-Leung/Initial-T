@@ -38,6 +38,7 @@ public class AiWheelPhysics : MonoBehaviour
     public AnimationCurve FrontTireGripCurve;
     public AnimationCurve RearTireGripCurve;
 
+    public float dragCoefficient = 0.2f;
 
 
 
@@ -113,7 +114,7 @@ public class AiWheelPhysics : MonoBehaviour
         float steeringChange;
         if (wheel.name == "FL" || wheel.name == "FR")
         {
-            steeringChange = -steeringVelocity * frontWheelGrip ; // The change in velocity required to correct for lateral slip
+            steeringChange = -steeringVelocity * frontWheelGrip; // The change in velocity required to correct for lateral slip
         }
         else
         {
@@ -127,12 +128,12 @@ public class AiWheelPhysics : MonoBehaviour
         {
             Vector3 force = acceleration * wheeldirection;
             // Clamp the force to prevent excessive steering forces
-             // Adjust this value as needed
+            // Adjust this value as needed
             force = Vector3.ClampMagnitude(force, maxSteeringForce);
             Vector3 position = wheel.transform.position;
             VechicleRigidBody.AddForceAtPosition(force, position);
 
-           
+
 
             if (frameCounter == 60)
             {
@@ -147,26 +148,26 @@ public class AiWheelPhysics : MonoBehaviour
         }
     }
 
-    void ApplyThrottle(GameObject wheel, float throttle, Vector3 forward, bool rayhit, float speedRatio)
+    void ApplyThrottle(GameObject wheel, float throttle, Vector3 forward, float speedRatio)
     {
-        if (rayhit)
 
+
+
+        if (throttle > 0)
         {
-            if (throttle > 0)
-            {
 
-                float avalibleTorque = maxTorque * powerCurve.Evaluate(speedRatio) * throttle; // Calculate the torque available to the wheel based on powercurve, throttle, and speed
-                VechicleRigidBody.AddForceAtPosition(forward * avalibleTorque, wheel.transform.position);
-                Debug.DrawLine(wheel.transform.position, wheel.transform.position + forward * 2, Color.blue, 1f);
-            }
-            else
-            {
-
-                float brakeForce = throttle - 0.1f * 10;
-                VechicleRigidBody.AddForceAtPosition(forward * brakeForce, wheel.transform.position);
-
-            }
+            float avalibleTorque = maxTorque * powerCurve.Evaluate(speedRatio) * throttle; // Calculate the torque available to the wheel based on powercurve, throttle, and speed
+            VechicleRigidBody.AddForceAtPosition(forward * avalibleTorque, wheel.transform.position);
+            Debug.DrawLine(wheel.transform.position, wheel.transform.position + forward * 2, Color.blue, 1f);
         }
+        else
+        {
+
+            float brakeForce = throttle - 0.1f * 10;
+            VechicleRigidBody.AddForceAtPosition(forward * brakeForce, wheel.transform.position);
+
+        }
+
     }
 
     void VisualiseWheel(GameObject wheel, Vector3 forward)
@@ -180,36 +181,52 @@ public class AiWheelPhysics : MonoBehaviour
         }
     }
 
+
+    void ApplyFriction(Vector3 forward)
+    {
+
+        Vector3 velocity = VechicleRigidBody.velocity;
+        float speed = velocity.magnitude;
+        Vector3 dragForce = -velocity.normalized * speed * speed * dragCoefficient;
+
+        // Apply the drag force to the vehicle's rigidbody
+        VechicleRigidBody.AddForce(dragForce);
+    }
+
     void WheelPhysics(List<GameObject> Wheels)
     {
         float throttle = GetComponent<carfollower>().Throttle;
-       
+
         float steer = GetComponent<carfollower>().Steering;
-       
+
         // calculate the current steering angle
         currentSteeringAngle = maxSteerAngle * steer;
+        Vector3 forward = -VechicleRigidBody.transform.right;
+
+        ApplyFriction(forward);
         foreach (GameObject wheel in Wheels)
         {
             float currentSpeed = VechicleRigidBody.velocity.magnitude;
             float speedRatio = currentSpeed / maxSpeed;
-            Vector3 forward = -VechicleRigidBody.transform.right;
+
             bool rayhit = suspension(wheel);
             steering(wheel, throttle, currentSteeringAngle, rayhit, speedRatio);
-            if (wheel.name == "RL" || wheel.name == "RR")
+
+            if (rayhit && wheel.name == "RL" || wheel.name == "RR")
             {
-                ApplyThrottle(wheel, throttle, forward, rayhit, speedRatio);
+                ApplyThrottle(wheel, throttle, forward, speedRatio);
             }
             VisualiseWheel(wheel, forward);
         }
 
-        
+
 
     }
     void FixedUpdate()
     {
 
         WheelPhysics(Wheels);
-        
+
         frameCounter++;
 
 
